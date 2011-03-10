@@ -8,6 +8,7 @@
 # e-mail: koen@devoegt.be
 
 import serial
+import time
 
 SERIAL = 1
 KEYBOARD = 2
@@ -354,6 +355,9 @@ def scanitems():
 	item = getInput()
 	if item <> "stop" and itemlist.has_key(item):
 	    invoicelist.append(itemlist[item])
+            lcd.write(str(itemlist[item]["name"]))
+            lcd.write("    ")
+            lcd.write(str(itemlist[item]["price"]))
 	    display(invoicelist)
 	if item <> "stop" and item <> "remove" and not itemlist.has_key(item):
 	    display(invoicelist)
@@ -485,6 +489,9 @@ def MainScreen():
     """
     Displays the main screen.
     """
+    # LCD
+    lcd.write("Jostokassa:     ")
+    lcd.write("1-Sluit 2-Nw Rek")
 
     # Print Positions
     ScreenSize = GetTheSize()
@@ -604,6 +611,8 @@ def ArchiveDayInvoice():
 
 def CloseProgram():
     os.system("clear")
+    lcd.write("Sluiten dagrap? ")
+    lcd.write("<confirm> <stop>")
     print "Om de dag \"af te sluiten\" en het dagrapport te archiveren, scan <confirm>."
     print "Om het programma af te sluiten zonder het dagrapport te archiveren, scan <stop>."
     answer = getInput()
@@ -611,14 +620,17 @@ def CloseProgram():
         os.system("clear")
         ArchiveDayInvoice()
         print "Het dagrapport is gearchiveerd."
+        lcd.write("Gearchiveerd")
     elif answer == "stop":
         os.system("clear")
         print "Het dagrapport is niet gearchiveerd."
+        lcd.write("Niet gearchiveerd")
         print "De volgende keer de kassa wordt opgestart, wordt hetzelfde dagrapport gebruikt."
     else:
         os.system("clear")
         print "Dat was geen geldige keuze."
         print "Het dagrapport is niet gearchiveerd."
+        lcd.write("Niet gearchiveerd")
         print "De volgende keer de kassa wordt opgestart, wordt hetzelfde dagrapport gebruikt."
 
 def main():
@@ -654,5 +666,7 @@ def main():
 	    Help()
 
 if __name__ == "__main__":
-    ser = serial.Serial("/dev/ttyS0", 9600)
-    main()
+   lcd = serial.Serial("/dev/ttyACM0", 9600)
+   ser = serial.Serial("/dev/ttyS0", 9600)
+   time.sleep(1.5)
+   main()

@@ -1,0 +1,12 @@
+
+sudo useradd -d /home/josto -m -s /bin/bash josto
+sudo addgroup josto dialout
+
+vim ~/.bashrc
+
+# always start the jostokassa application when the user josto logs in.
+~/jostokassa
+
+sudo vim /etc/init/tty6.conf
+
+exec /bin/login -f USERNAME < /dev/tty6 > /dev/tty6 2>&1
