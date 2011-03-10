@@ -1,0 +1,658 @@
+#!/usr/bin/env python
+# -*- encoding: utf-8 -*-:sp
+
+# author: Koert
+# e-mail: koert@dumsoft.be
+
+# author getInput: Koen
+# e-mail: koen@devoegt.be
+
+import serial
+
+SERIAL = 1
+KEYBOARD = 2
+
+mode = SERIAL
+
+def getInput():
+	returnString = ""
+	if mode == SERIAL:
+		returnString = ser.readline()
+		returnString = returnString.strip()
+	elif mode == KEYBOARD:
+		returnString = raw_input()
+	else:
+		print "Input missconfigured!!!"
+	return returnString
+
+"""
+ToDo
+====
+-->	Make it use one file for stock and prices
+-->	Build in cancel thingies everywhere
+-->     Finish the script for archiving the dayinvoice.
+	So far it doesn't parse the dayinvoice, it just copies it.
+"""
+
+import os
+import time
+
+def DeclareColours():
+    # Clear colour settings
+    global CLEARSETTINGS
+    CLEARSETTINGS = "\033[0m"
+
+    # Foreground colours
+    global FBLACK
+    FBLACK = "\033[30m"
+    global FRED
+    FRED = "\033[31m"
+    global FGREEN
+    FGREEN = "\033[32m"
+    global FYELLOW
+    FYELLOW = "\033[33m"
+    global FBLUE
+    FBLUE = "\033[34m"
+    global FMAGENTA
+    FMAGENTA = "\033[35m"
+    global FCYAN
+    FCYAN = "\033[36m"
+    global FWHITE
+    FWHITE = "\033[37m"
+
+    # Background colours
+    global BBLACK
+    BBLACK = "\033[40m"
+    global BRED
+    BRED = "\033[41m"
+    global BGREEN
+    BGREEN = "\033[42m"
+    global BYELLOW
+    BYELLOW = "\033[43m"
+    global BBLUE
+    BBLUE = "\033[44m"
+    global BMAGENTA
+    BMAGENTA = "\033[45m"
+    global BCYAN
+    BCYAN = "\033[46m"
+    global BWHITE
+    BWHITE = "\033[47m"
+
+def FirstUse():
+    """
+    Checks if the files "codelist" and "stocklist" exist in the users homedir.
+    Then it checks if "dayinvoice" exists in /usr/tmp/.
+    If they don't, it creates them.
+    """
+
+    freedayinvoice = os.getenv("HOME") + "/freedayinvoice"
+    stocklist = os.getenv("HOME") + "/stocklist"
+    dayinvoice = os.getenv("HOME") + "/dayinvoice"
+
+    commandfreedayinvoice = "touch " + freedayinvoice
+    commandstocklist = "touch " + stocklist
+    commanddayinvoice = "touch " + dayinvoice
+    
+    os.system(commandfreedayinvoice)
+    os.system(commandstocklist)
+    os.system(commanddayinvoice)
+
+def GetStockList():
+    """
+    Returns a list with all products.
+    """
+    
+    filename = os.getenv("HOME") + "/stocklist"
+    file = open(filename, "r")
+    filestocklist = file.read().split("\n")
+    file.close()
+    ProductList = {}
+    for line in filestocklist:
+	if line <> "":
+	    fileline = line.split("\t")
+	    ReadProduct = {}
+	    ReadProduct["barcode"] = fileline[0]
+	    ReadProduct["name"] = fileline[1]
+	    ReadProduct["price"] = fileline[2]
+	    ReadProduct["stock"] = fileline[3]
+            ReadProduct["minimum"] = fileline[4]
+            ProductList[ReadProduct["barcode"]] = ReadProduct
+    return ProductList
+
+def DayReport():
+    """
+    Prints the dayreport
+    """
+    
+    # Get info concerning sold stuff
+    dayinvoicelocation = os.getenv("HOME") + "/dayinvoice"
+    dayinvoicefile = open(dayinvoicelocation, "r")
+    dayinvoicestocklist = dayinvoicefile.read().split("\n")
+    dayinvoicefile.close()
+    dayinvoice = 0
+    for line in dayinvoicestocklist:
+        if line <> "":
+            fileline = line.split("\t")
+	    dayinvoice = float(dayinvoice) + float(fileline[2])
+
+    # Get info concerning stuff consumed for free
+    freedayinvoicelocation = os.getenv("HOME") + "/freedayinvoice"
+    freedayinvoicefile = open(freedayinvoicelocation, "r")
+    freedayinvoicestocklist = freedayinvoicefile.read().split("\n")
+    freedayinvoicefile.close()
+    freedayinvoice = 0
+    for line in freedayinvoicestocklist:
+        if line <> "":
+            fileline = line.split("\t")
+	    freedayinvoice = float(freedayinvoice) + float(fileline[2])
+
+    # Get the startamount of the cashregister (well "get", it's hardcoded)
+    StartAmount = 308.00
+
+    # Print Positions
+    ScreenSize = GetTheSize()
+    Rows = int(ScreenSize["rows"]) - 1
+    Columns = int(ScreenSize["columns"])
+    LR = "\033[" + str(Rows) + ";1H"
+    os.system("clear")
+    MenuLine = "\033[" + str(Columns / 3) + "C"
+ 
+    # Print Info
+    tekst = "Dag Rapport"
+    print FBLACK + BCYAN + tekst + (Columns - len(tekst))*" " + CLEARSETTINGS
+    print "\033[" + str(Rows / 3) + "B"
+    print MenuLine + "Beginkassa:         " + "\t" + str(StartAmount)
+    print MenuLine + "Verkochte Drank:    " + "\t" + str(dayinvoice)
+    print MenuLine + "Gratis Drank:       " + "\t" + str(freedayinvoice)
+    print MenuLine + "Totaal in de kassa: " + "\t" + str(float(StartAmount)+float(dayinvoice))
+    getInput()
+
+def CheckStock():
+    """
+    Checks the stock
+    """
+    
+    os.system("clear")
+    ScreenSize = GetTheSize()
+    Columns = int(ScreenSize["columns"])    
+    print FBLACK + BCYAN + "STOCK" + (Columns - 5) * " " + CLEARSETTINGS
+    filename = os.getenv("HOME") + "/stocklist"
+    file = open(filename, "r")
+    StockList = file.read().split("\n")
+    for item in StockList:
+	if item <> "":
+	    Product = item.split("\t")
+	    if int(Product[3]) < int(Product[4]):
+		PrintColor = FRED
+	    elif int(Product[3]) < (int(Product[4])*1.5):
+		PrintColor = FYELLOW
+	    elif int(Product[3]) < (int(Product[4])*2):
+		PrintColor = FGREEN
+	    else:
+		PrintColor = CLEARSETTINGS
+	    print PrintColor + str(Product[1]) + "\t" + str(Product[3]) + CLEARSETTINGS
+    getInput()
+
+def AdjustStock():
+    """
+    Adds units to the stock.
+    """
+    
+    ScreenSize = GetTheSize()
+    Columns = int(ScreenSize["columns"])
+    os.system("clear")
+    filename = os.getenv("HOME") + "/stocklist"
+    
+    # Get the existing stock
+    file = open(filename, "r")
+    filestocklist = file.read().split("\n")
+    file.close()
+    ProductList = {}
+    for line in filestocklist:
+	if line <> "":
+	    fileline = line.split("\t")
+	    ReadProduct = {}
+	    ReadProduct["barcode"] = fileline[0]
+	    ReadProduct["name"] = fileline[1]
+	    ReadProduct["price"] = fileline[2]
+	    ReadProduct["stock"] = fileline[3]
+            ReadProduct["minimum"] = fileline[4]
+            ProductList[ReadProduct["barcode"]] = ReadProduct
+    
+    # Adjust the stock
+    GoOn = True
+    while GoOn == True:
+	os.system("clear")
+        tekst = "STOCK AANPASSEN"
+        print FWHITE + BRED + tekst + (Columns - len(tekst)) * " " + CLEARSETTINGS
+	print "Scan het toe te voegen product of scan <stop> om te stoppen:"
+	ScannedProduct = getInput()
+	if ScannedProduct == "stop":
+	    GoOn = False
+	else:
+	    if ProductList.has_key(ScannedProduct):
+		Product = {}
+	        Product = ProductList[ScannedProduct]
+	        os.system("clear")
+	        print FRED + "1 \t Barcode: \t" + Product["barcode"] + CLEARSETTINGS
+                print "2 \t Naam: \t" + Product["name"]
+                print "3 \t Prijs: \t" + str(Product["price"])
+	        print "4 \t Aantal: \t" + str(Product["stock"])
+                print "5 \t Minimum: \t" + str(Product["minimum"])
+	        print ""
+	        print "Wat moet er aangepast worden?"
+	        Answer = getInput()
+                if Answer <> "cancel":
+	            if Answer == "1" or Answer == "one":
+                        print "De barcode kan niet aangepast worden"
+                        SecondAnswer = getInput()
+                    elif Answer == "2" or Answer == "two":
+                        print "Voer de nieuwe naam in:"
+                        SecondAnswer = getInput()
+                        if SecondAnswer <> "cancel":
+                            Product["name"] = SecondAnswer
+                            SaveStock(ProductList)
+                    elif Answer == "3" or Answer == "three":
+                        print "Voer de nieuwe prijs in:"
+                        SecondAnswer = getInput()
+                        if SecondAnswer <> "cancel":
+                            Product["price"] = SecondAnswer
+                            SaveStock(ProductList)
+                    elif Answer == "4" or Answer == "four":
+                        print "Voer het nieuwe aantal aanwezige eenheden in:"
+                        SecondAnswer = getInput()
+                        if SecondAnswer <> "cancel":
+                            Product["stock"] = SecondAnswer
+                            SaveStock(ProductList)
+                    elif Answer == "5" or Answer == "five":
+                        print "Voor het nieuwe minimum aantal aanwezige eenheden in:"
+                        SecondAnswer = getInput()
+                        if SecondAnswer <> "cancel":
+                            Product["minimum"] = SecondAnswer
+                            SaveStock(ProductList)
+	    else:
+		os.system("clear")
+		print "Dit is een nieuw product."
+		print "Barcode: \t" + ScannedProduct
+		print "Wat is de naam van het product?"
+		Name = getInput()
+                print "Wat is de prijs van het product?"
+                Price = getInput()
+		print "Hoeveel eenheden moeten er minimum aanwezig zijn?"
+		Minimum = getInput()
+		print "Hoeveel eenheden wil u toevoegen?"
+		Amount = getInput()
+		Product = {}
+		Product["barcode"] = ScannedProduct
+		Product["stock"] = Amount
+		Product["name"] = Name
+                Product["price"] = Price
+		Product["minimum"] = Minimum
+		ProductList[Product["barcode"]] = Product
+                if Product["barcode"] <> "cancel" and Product["name"] <> "cancel" and Product["price"] <> "cancel" and Product["stock"] <> "cancel" and Product["minimum"] <> "cancel":
+		    SaveStock(ProductList)
+
+def RemoveStock(Code, Amount):
+    """
+    Removes stock from the stocklist
+    """
+
+    ScreenSize = GetTheSize()
+    Columns = int(ScreenSize["columns"])
+    os.system("clear")
+    filename = os.getenv("HOME") + "/stocklist"
+    
+    # Get the existing stock
+    file = open(filename, "r")
+    filestocklist = file.read().split("\n")
+    file.close()
+    ProductList = {}
+    for line in filestocklist:
+	if line <> "":
+	    fileline = line.split("\t")
+	    ReadProduct = {}
+	    ReadProduct["barcode"] = fileline[0]
+	    ReadProduct["name"] = fileline[1]
+	    ReadProduct["price"] = fileline[2]
+	    ReadProduct["stock"] = fileline[3]
+            ReadProduct["minimum"] = fileline[4]
+            ProductList[ReadProduct["barcode"]] = ReadProduct
+    
+    # Remove from the stock
+    if ProductList.has_key(Code):
+        Product = {}
+        Product = ProductList[Code]
+        Product["stock"] = int(Product["stock"]) - int(Amount)
+        NewAmount = Product["stock"]
+        print "Nieuw aantal: \t" + str(NewAmount)
+        SaveStock(ProductList)
+
+def SaveStock(ProductList):
+    """
+    Save the stocklistlist to the file
+    """
+
+    list = ProductList
+    stocklist = os.getenv("HOME") + "/stocklist"
+    file = open(stocklist, "w")
+    for Product in list:
+	if Product <> None:
+	    Item = list[Product]
+            PrintString = str(Item["barcode"]) + "\t" + str(Item["name"]) + "\t" + str(Item["price"]) + "\t" + str(Item["stock"]) + "\t" + str(Item["minimum"]) + "\n"
+            file.write(PrintString)
+    file.close()
+
+def scanitems():
+    """
+    Allows the user to scan products and add them to the current check, remove products from the check or close the check.
+    """
+    
+    itemlist = GetStockList()
+    invoicelist = []
+    item = None
+    while item <> "stop":
+	item = getInput()
+	if item <> "stop" and itemlist.has_key(item):
+	    invoicelist.append(itemlist[item])
+	    display(invoicelist)
+	if item <> "stop" and item <> "remove" and not itemlist.has_key(item):
+	    display(invoicelist)
+	if item == "remove":
+	    invoicelist.pop()
+	    display(invoicelist)
+	if item == "stop":
+            display(invoicelist)
+            TotalAmount = 0
+            for Product in invoicelist:
+                TotalAmount = float(TotalAmount) + float(Product["price"])
+	    ScreenSize = GetTheSize()
+	    Rows = int(ScreenSize["rows"])
+	    Columns = int(ScreenSize["columns"])
+	    Column = (Columns - 48) / 2
+	    Row = (Rows - 4) / 2
+	    LOne = BRED + FWHITE + "\033[" + str(Row) + ";" + str(Column) + "H"
+	    LTwo = BRED + FWHITE + "\033[" + str(Row + 1) + ";" + str(Column) + "H"
+	    LThree = BRED + FWHITE + "\033[" + str(Row + 2) + ";" + str(Column) + "H"
+	    LFour = BRED + FWHITE + "\033[" + str(Row + 3) + ";" + str(Column) + "H"
+            LFive = BRED + FWHITE + "\033[" + str(Row + 4) + ";" + str(Column) + "H"
+            LSix = BRED + FWHITE + "\033[" + str(Row + 5) + ";" + str(Column) + "H"
+	    print LOne + " ************************************************ " + CLEARSETTINGS,
+	    print LTwo + "   Scan <confirm> om de rekening af te sluiten.   " + CLEARSETTINGS,
+	    print LThree + "   Scan <cancel> om terug te keren.               " + CLEARSETTINGS,
+	    print LFour + " ************************************************ " + CLEARSETTINGS,
+            print LFive + str(22*" ") + str(TotalAmount) + str((28 - len(str(TotalAmount)))*" ") + CLEARSETTINGS,
+            print LSix + " ************************************************ " + CLEARSETTINGS,
+	    confirmation = getInput()
+	    if confirmation == "confirm":
+		item = "stop"
+	    else:
+		item = None
+		display(invoicelist)
+
+    return invoicelist
+
+def display(invoice):
+    """
+    Displays the current check.
+    """
+    
+    os.system("clear")
+
+    # Set the variables
+    completelist = invoice
+    total = 0
+    ScreenSize = GetTheSize()
+    Columns = int(ScreenSize["columns"])
+    Rows = int(ScreenSize["rows"]) - 3
+    LastRow = int(ScreenSize["rows"]) - 1
+    LR = "\033[" + str(LastRow) + ";1H"
+
+    # Make sure it will fit on the screen
+    if len(completelist) - 1 < Rows:
+	list = completelist
+    else:
+    	endnumber = len(completelist)
+	startnumber = endnumber - (Rows - 1)
+	list = []
+	while startnumber < (endnumber + 1):
+	    list.append(completelist[(startnumber - 1)])
+	    startnumber = startnumber + 1
+
+
+    print FBLACK + BGREEN + "SCAN PRODUCTEN" + (Columns - 14) * " " + CLEARSETTINGS
+    
+    # print the items
+    for item in list:
+	print str(item["name"]) +"\t" + item["price"]
+    
+    # get the total cost
+    for item in completelist:
+	total = float(total) + float(item["price"])
+
+    print LR + FBLACK + BGREEN + "TOTAAL BEDRAG IN EURO: " + str(total) + (Columns - 23 - len(str(total)))*" " + CLEARSETTINGS
+    print "Scan het volgende product, of scan <stop> om te stoppen...", # The comma makes it not add a line feed
+    print LR
+
+def SaveToDayLog(ProductList, FileName):
+    """
+    Write the info to one of the two logs (dayinvoice or freedayinvoice)
+    """
+    FileLocation = os.getenv("HOME") + "/" + FileName
+    File = open(FileLocation, "a")
+    for Product in ProductList:
+        WriteString = Product["barcode"] + "\t" + Product["name"] + "\t" + Product["price"] + "\n"
+        File.write(WriteString)
+    File.close()
+
+def FreeDrink():
+    """
+    Keeps track of free drinks/food for volunteers etc.
+    """
+
+    emptylist = ()
+    display(emptylist)
+    invoice = scanitems()
+    for Product in invoice:
+        RemoveStock(Product["barcode"], 1)
+    SaveToDayLog(invoice, "freedayinvoice")
+
+def SoldDrink():
+    """
+    Keeps track of free drinks/food being sold
+    """
+
+    emptylist = ()
+    display(emptylist)
+    invoice = scanitems()
+    for Product in invoice:
+        RemoveStock(Product["barcode"], 1)
+    SaveToDayLog(invoice, "dayinvoice")
+
+def GetTheSize():
+    """
+    Gets the size of the console window.
+    """
+    # Get the number of rows and columns
+    myrows, mycolumns = os.popen("stty size", "r").read().split()
+
+    # Return the result
+    resultsize = {}
+    resultsize["rows"] = myrows
+    resultsize["columns"] = mycolumns
+    return resultsize
+
+def MainScreen():
+    """
+    Displays the main screen.
+    """
+
+    # Print Positions
+    ScreenSize = GetTheSize()
+    Rows = int(ScreenSize["rows"]) - 1
+    Columns = int(ScreenSize["columns"])
+    LR = "\033[" + str(Rows) + ";1H"
+    os.system("clear")
+    MenuLine = "\033[" + str(Columns / 3) + "C"
+
+    tekst = "VWCR 0.1"
+    print FWHITE + BRED + tekst + (Columns - len(tekst))*" " + CLEARSETTINGS
+    print "\033[" + str(Rows / 3) + "B"
+    print FYELLOW + MenuLine + "1" + "\t" + "Afsluiten"
+    print FGREEN + MenuLine + "2" + "\t" + "Nieuwe Rekening"
+    print FGREEN + MenuLine + "3" + "\t" + "Drank Medewerker"
+    print FCYAN + MenuLine + "4" + "\t" + "Dagrapport"
+    print FCYAN + MenuLine + "5" + "\t" + "Stock Bekijken"
+    print FRED + MenuLine + "6" + "\t" + "Stock Aanpassen"
+    print FCYAN + MenuLine + "0" + "\t" + "Help"
+    print LR + FWHITE + BRED +"Maak uw keuze..." + (Columns - 16)*" " + CLEARSETTINGS
+
+def ArchiveDayInvoice():
+    """
+    Archives dayinvoice and freedayinvoice (and removes the original files)
+    """
+    
+    # Set up variables
+    dayinvoicelocation = os.getenv("HOME") + "/dayinvoice"
+    freedayinvoicelocation = os.getenv("HOME") + "/freedayinvoice"
+    dayinvoice = "0"
+    freedayinvoice = "0"
+    dayinvoicelist = {}
+    freedayinvoicelist = {}
+    localtime = time.localtime(time.time())
+    year = localtime[0]
+    month = localtime[1]
+    day = localtime[2]
+    hour = localtime[3]
+    minute = localtime[4]
+    second = localtime[5]
+    formatted_localtime = str(year) + "-" + str(month) + "-" + str(day) + "_" + str(hour) + "-" + str(minute) + "-" + str(second) 
+    archivedinvoice = os.getenv("HOME") + "/" + formatted_localtime
+    
+    # Get info from dayinvoice
+    dayinvoicefile = open(dayinvoicelocation, "r")
+    dayinvoicefilesource = dayinvoicefile.read().split("\n")
+    for Line in dayinvoicefilesource:
+        if Line <> "":
+            Product = {}
+            SplitLine = Line.split("\t")
+            Product["barcode"] = SplitLine[0]
+            Product["name"] = SplitLine[1]
+            dayinvoice = float(dayinvoice) + float(SplitLine[2])
+            
+            if dayinvoicelist.has_key(Product["barcode"]):
+                ListProduct = dayinvoicelist[Product["barcode"]]
+                ListProduct["amount"] = int(ListProduct["amount"]) + 1
+                dayinvoicelist[ListProduct["barcode"]] = ListProduct
+            else:
+                ListProduct = {}
+                ListProduct["barcode"] = Product["barcode"]
+                ListProduct["name"] = Product["name"]
+                ListProduct["amount"] = 1
+                dayinvoicelist[ListProduct["barcode"]] = ListProduct
+    
+    # Get info from freedayinvoice
+    freedayinvoicefile = open(freedayinvoicelocation, "r")
+    freedayinvoicefilesource = freedayinvoicefile.read().split("\n")
+    for Line in freedayinvoicefilesource:
+        if Line <> "":
+            Product = {}
+            SplitLine = Line.split("\t")
+            Product["barcode"] = SplitLine[0]
+            Product["name"] = SplitLine[1]
+            freedayinvoice = float(freedayinvoice) + float(SplitLine[2])
+            
+            if freedayinvoicelist.has_key(Product["barcode"]):
+                ListProduct = freedayinvoicelist[Product["barcode"]]
+                ListProduct["amount"] = int(ListProduct["amount"]) + 1
+                freedayinvoicelist[ListProduct["barcode"]] = ListProduct
+            else:
+                ListProduct = {}
+                ListProduct["barcode"] = Product["barcode"]
+                ListProduct["name"] = Product["name"]
+                ListProduct["amount"] = 1
+                freedayinvoicelist[ListProduct["barcode"]] = ListProduct
+
+    # Write to the archive file
+    command = "touch " + archivedinvoice
+    os.system(command)
+    File = open(archivedinvoice, "w")
+    WriteLine = formatted_localtime + "\n\n"
+    File.write(WriteLine)
+    WriteLine = "Totaal Verkocht: " + str(dayinvoice) + "\n"
+    File.write(WriteLine)
+    WriteLine = "Totaal Gratis Gedronken: " + str(freedayinvoice) + "\n"
+    File.write(WriteLine)
+    WriteLine = "\n\n"
+    File.write(WriteLine)
+    WriteLine = "Details voor verkochte drank:\n"
+    File.write(WriteLine)
+    for code, Product in dayinvoicelist.iteritems():
+        WriteLine = str(Product["amount"]) + "\t" + str(Product["name"]) + "\n"
+        File.write(WriteLine)
+    WriteLine = "\n\n"
+    File.write(WriteLine)
+    WriteLine = "Details voor gratis geschonken drank:\n"
+    File.write(WriteLine)
+    for code, Product in freedayinvoicelist.iteritems():
+        WriteLine = str(Product["amount"]) + "\t" + str(Product["name"]) + "\n"
+        File.write(WriteLine)
+    File.close()
+    DelOne = "rm " + dayinvoicelocation
+    DelTwo = "rm " + freedayinvoicelocation
+    os.system(DelOne)
+    os.system(DelTwo)
+
+def CloseProgram():
+    os.system("clear")
+    print "Om de dag \"af te sluiten\" en het dagrapport te archiveren, scan <confirm>."
+    print "Om het programma af te sluiten zonder het dagrapport te archiveren, scan <stop>."
+    answer = getInput()
+    if answer == "confirm":
+        os.system("clear")
+        ArchiveDayInvoice()
+        print "Het dagrapport is gearchiveerd."
+    elif answer == "stop":
+        os.system("clear")
+        print "Het dagrapport is niet gearchiveerd."
+        print "De volgende keer de kassa wordt opgestart, wordt hetzelfde dagrapport gebruikt."
+    else:
+        os.system("clear")
+        print "Dat was geen geldige keuze."
+        print "Het dagrapport is niet gearchiveerd."
+        print "De volgende keer de kassa wordt opgestart, wordt hetzelfde dagrapport gebruikt."
+
+def main():
+    DeclareColours()
+    FirstUse()
+
+    os.system("clear")
+    dayinvoicelocation = os.getenv("HOME") + "/dayinvoice"
+    dayfree = os.getenv("HOME") + "/freedayinvoice"
+    commandtouch = "touch " + dayinvoicelocation
+    os.system(commandtouch)
+    commandtouch = "touch " + dayfree
+    os.system(commandtouch)
+
+    GoOn = True
+    while GoOn == True:
+	MainScreen()
+	menu = getInput()
+        if menu == "1" or menu == "one":
+            CloseProgram()
+	    GoOn = False
+	if menu == "2" or menu == "two":
+	    SoldDrink()
+	if menu == "3" or menu == "three":
+	    FreeDrink()
+	if menu == "4" or menu == "four":
+	    DayReport()
+	if menu == "5" or menu == "five":
+	    CheckStock()
+	if menu == "6" or menu == "six":
+	    AdjustStock()
+	if menu == "0" or menu == "zero":
+	    Help()
+
+if __name__ == "__main__":
+    ser = serial.Serial("/dev/ttyS0", 9600)
+    main()
