@@ -10,10 +10,12 @@
 import serial
 import time
 
+LCDSUPPORT = True
+
 SERIAL = 1
 KEYBOARD = 2
 
-mode = SERIAL
+mode = KEYBOARD
 
 def getInput():
 	returnString = ""
@@ -666,7 +668,7 @@ def main():
 	    Help()
 
 if __name__ == "__main__":
-   lcd = serial.Serial("/dev/ttyACM0", 9600)
-   ser = serial.Serial("/dev/ttyS0", 9600)
+   #lcd = serial.Serial("/dev/ttyACM0", 9600)
+   #ser = serial.Serial("/dev/ttyS0", 9600)
    time.sleep(1.5)
    main()
